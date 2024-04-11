@@ -5,20 +5,25 @@
 
 set -e
 
-# ensure /root/.ssh exists and has correct permissions
-mkdir -p /root/.ssh
-chmod 700 /root/.ssh
+ssh_dir="$HOME/.ssh"
+authorized_keys="$ssh_dir/authorized_keys"
+instance_keys="$ssh_dir/instance_keys"
 
-# ensure /root has the correct permissions
-chown root:root /root
-chmod 700 /root
+# ensure ~ has the correct permissions
+chown "$(id -nu):$(id -ng)" "$HOME"
+chmod 700 "$HOME"
+
+# ensure ~/.ssh exists and has correct permissions
+mkdir -p "$ssh_dir"
+chown "$(id -nu):$(id -ng)" "$ssh_dir"
+chmod 700 "$ssh_dir"
 
 # `--upgrade` refreshes the metadata cache
 if [ "$1" = "--upgrade" ]; then
 	/usr/local/bin/scw-metadata > /dev/null
 fi
 
-cat << EOF > /root/.ssh/authorized_keys
+cat << EOF > "$authorized_keys"
 #
 # WARNING: Automatically generated file
 # This file will be erased at every boot
@@ -30,7 +35,7 @@ cat << EOF > /root/.ssh/authorized_keys
 #        - i.e: "AUTHORIZED_KEY=ssh-rsa_XXXXXXXXXXX AUTHORIZED_KEY=ssh-rsa_YYYYYYYYYYYYYYY"
 #        - Be sure to replace all spaces with underscores
 #        - $> sed 's/ /_/g' ~/.ssh/id_rsa.pub
-#   -- Add the keys to '/root/.ssh/instance_keys' which will be imported
+#   -- Add the keys to '~/.ssh/instance_keys' which will be imported
 #
 # And recreate your 'authorized_keys' file with the new keys:
 #   -- Run 'scw-fetch-ssh-keys --upgrade'
@@ -38,18 +43,18 @@ cat << EOF > /root/.ssh/authorized_keys
 EOF
 
 # add Scaleway account keys
-/usr/local/bin/scw-metadata --cached | grep SSH_PUBLIC_KEYS_.*_KEY | cut -d'=' -f 2- | tr -d \' >> /root/.ssh/authorized_keys
+/usr/local/bin/scw-metadata --cached | grep SSH_PUBLIC_KEYS_.*_KEY | cut -d'=' -f 2- | tr -d \' >> "$authorized_keys"
 
 # add Server tags keys
-/usr/local/bin/scw-metadata --cached | grep TAGS_.*=AUTHORIZED_KEY | cut -d'=' -f 3- | sed 's/_/\ /g' >> /root/.ssh/authorized_keys
+/usr/local/bin/scw-metadata --cached | grep TAGS_.*=AUTHORIZED_KEY | cut -d'=' -f 3- | sed 's/_/\ /g' >> "$authorized_keys"
 
 # Import custom keys
-if [ -f /root/.ssh/instance_keys ]; then
-	cat << EOF >> /root/.ssh/authorized_keys
-# Below your custom ssh keys from '/root/.ssh/instance_keys'
+if [ -f "$instance_keys" ]; then
+	cat << EOF >> "$authorized_keys"
+# Below your custom ssh keys from '$instance_keys'
 EOF
-	(cat /root/.ssh/instance_keys | grep -v "^#" || true) >> /root/.ssh/authorized_keys
+	(cat "$instance_keys" | grep -v "^#" || true) >> "$authorized_keys"
 fi
 
 # authorized_keys should only be readable by the owner and no one else
-chmod 0600 /root/.ssh/authorized_keys
+chmod 0600 "$authorized_keys"
